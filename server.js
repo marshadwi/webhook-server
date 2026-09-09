@@ -12,6 +12,9 @@ require('dotenv').config();
 
 const express = require('express');
 const cors    = require('cors');
+const fs      = require('fs');
+const path    = require('path');
+const { exec } = require('child_process');
 const db      = require('./database');
 
 const app  = express();
@@ -46,7 +49,7 @@ app.get('/', async (req, res) => {
 
   const domain = process.env.KOYEB_PUBLIC_DOMAIN
     ? `https://${process.env.KOYEB_PUBLIC_DOMAIN}`
-    : `http://localhost:${PORT}`;
+    : (process.env.NGROK_DOMAIN ? `https://${process.env.NGROK_DOMAIN}` : `http://localhost:${PORT}`);
   const publicUrl = `${domain}/webhook`;
 
   res.send(`
@@ -201,13 +204,58 @@ async function start() {
       console.log('🚀 ═══════════════════════════════════════════');
       console.log('   WEBHOOK SERVER BERJALAN!');
       console.log('═══════════════════════════════════════════════');
-      console.log(`   🖥️  Local  : http://localhost:${PORT}`);
+      console.log(`   🖥️  Local   : http://localhost:${PORT}`);
+
       if (process.env.KOYEB_PUBLIC_DOMAIN) {
-        console.log(`   ☁️  Cloud  : https://${process.env.KOYEB_PUBLIC_DOMAIN}`);
+        console.log(`   ☁️  Koyeb   : https://${process.env.KOYEB_PUBLIC_DOMAIN}`);
         console.log(`   📡  Endpoint: https://${process.env.KOYEB_PUBLIC_DOMAIN}/webhook`);
+        console.log('═══════════════════════════════════════════════');
+        console.log('⏳ Menunggu webhook masuk...\n');
+        return;
       }
-      console.log('═══════════════════════════════════════════════');
-      console.log('⏳ Menunggu webhook masuk...\n');
+
+      // Cek apakah ngrok.exe ada di folder lokal
+      const ngrokExe = path.join(__dirname, 'ngrok.exe');
+      const authtoken = process.env.NGROK_AUTHTOKEN;
+      const domain    = process.env.NGROK_DOMAIN;
+
+      if (fs.existsSync(ngrokExe) && authtoken && domain) {
+        exec(`"${ngrokExe}" config add-authtoken ${authtoken}`, (err) => {
+          if (err) {
+            console.log('   ⚠️  Gagal set authtoken ngrok:', err.message);
+          }
+
+          const ngrokCmd = `"${ngrokExe}" http --domain=${domain} ${PORT}`;
+          const ngrokProcess = exec(ngrokCmd);
+
+          setTimeout(() => {
+            console.log('');
+            console.log('🔒 ═══════════════════════════════════════════');
+            console.log('   NGROK AKTIF — URL TETAP (tidak berubah!)');
+            console.log('═══════════════════════════════════════════════');
+            console.log('');
+            console.log(`   📡  https://${domain}/webhook`);
+            console.log('');
+            console.log('═══════════════════════════════════════════════');
+            console.log('   Info untuk Tim Frontend Mobile:');
+            console.log('───────────────────────────────────────────────');
+            console.log('   Method  : POST');
+            console.log(`   URL     : https://${domain}/webhook`);
+            console.log('   Header  : Content-Type: application/json');
+            console.log(`   Body    : {"message": "isi pesan"}`);
+            console.log('═══════════════════════════════════════════════');
+            console.log('');
+            console.log('⏳ Menunggu webhook masuk...\n');
+          }, 2000);
+
+          ngrokProcess.on('close', (code) => {
+            if (code !== 0) console.log('\n⚠️  ngrok berhenti.');
+          });
+        });
+      } else {
+        console.log('═══════════════════════════════════════════════');
+        console.log('⏳ Menunggu webhook masuk...\n');
+      }
     });
   } catch (err) {
     console.error('❌ Gagal koneksi database:', err.message);
