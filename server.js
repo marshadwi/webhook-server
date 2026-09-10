@@ -34,15 +34,50 @@ app.get('/', async (req, res) => {
   const notifs = await db.getAll();
 
   const rows = notifs.map(n => {
-    // Format tanggal supaya mudah dibaca
     const tgl = new Date(n.created_at).toLocaleString('id-ID', {
       timeZone: 'Asia/Jakarta'
     });
+
+    let contentHtml = '';
+    try {
+      if (typeof n.message === 'string' && (n.message.startsWith('{') || n.message.startsWith('['))) {
+        const p = JSON.parse(n.message);
+        if (p && (p.appSource || p.amount || p.payerName || p.rawMessage)) {
+          let badgeBg = '#2c3e50';
+          if (p.appSource === 'DANA') badgeBg = '#118eea';
+          else if (p.appSource === 'ShopeePay') badgeBg = '#ee4d2d';
+          else if (p.appSource === 'GoPay') badgeBg = '#00aed6';
+          else if (p.appSource === 'OVO') badgeBg = '#4c3298';
+          else if (p.appSource === 'BCA') badgeBg = '#0060af';
+
+          const formatted = p.formattedAmount || (p.amount ? 'Rp ' + Number(p.amount).toLocaleString('id-ID') : '');
+
+          contentHtml = `
+            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+              <span style="background:${badgeBg}; color:white; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:12px;">${p.appSource || 'Payment'}</span>
+              ${formatted ? `<span style="color:#27ae60; font-weight:bold; font-size:16px;">${formatted}</span>` : ''}
+              ${p.payerName ? `<span style="color:#555; font-size:13px;">• Pengirim: <b>${p.payerName}</b></span>` : ''}
+              ${p.type ? `<span style="background:#edf2f7; color:#4a5568; font-size:11px; padding:2px 6px; border-radius:4px;">${p.type}</span>` : ''}
+            </div>
+            ${p.rawMessage ? `<div style="font-size:13px; color:#444; background:#f8f9fa; padding:6px 10px; border-radius:4px; border-left:3px solid ${badgeBg}; margin-bottom:6px;">${p.rawMessage.replace(/\n/g, '<br>')}</div>` : ''}
+            <details style="margin-top:4px;">
+              <summary style="font-size:11px; color:#3498db; cursor:pointer;">🔍 Lihat JSON Mentah</summary>
+              <pre style="background:#2d3748; color:#a0aec0; padding:8px; border-radius:4px; font-size:11px; margin-top:4px; overflow-x:auto; font-family:monospace;">${JSON.stringify(p, null, 2)}</pre>
+            </details>
+          `;
+        }
+      }
+    } catch (e) {}
+
+    if (!contentHtml) {
+      contentHtml = `<span style="font-size:14px; color:#2d3748;">${n.message}</span>`;
+    }
+
     return `
       <tr>
-        <td style="text-align:center;width:60px;color:#888">${n.id}</td>
-        <td style="font-size:15px">${n.message}</td>
-        <td style="color:#aaa;font-size:12px;width:190px">${tgl}</td>
+        <td style="text-align:center;width:60px;color:#888;font-weight:bold;vertical-align:top;padding-top:16px;">${n.id}</td>
+        <td style="vertical-align:top;padding-top:14px;">${contentHtml}</td>
+        <td style="color:#718096;font-size:12px;width:190px;vertical-align:top;padding-top:16px;">${tgl}</td>
       </tr>
     `;
   }).join('');
@@ -147,17 +182,25 @@ app.get('/', async (req, res) => {
 app.post('/webhook', async (req, res) => {
   console.log('\n📨 Webhook masuk!', req.body);
 
-  const { message } = req.body;
+  let message = req.body.message;
 
-  if (!message || message.trim() === '') {
+  // Jika tim mobile mengirim objek langsung tanpa field 'message',
+  // atau mengirim field 'message' dalam bentuk objek JSON
+  if (typeof message === 'object' && message !== null) {
+    message = JSON.stringify(message);
+  } else if (!message && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+    message = JSON.stringify(req.body);
+  }
+
+  if (!message || (typeof message === 'string' && message.trim() === '')) {
     return res.status(400).json({
       success: false,
-      error  : 'Field "message" wajib diisi!',
+      error  : 'Data notifikasi tidak boleh kosong!',
       contoh : { message: 'Halo dari aplikasi mobile!' }
     });
   }
 
-  const record = await db.insert(message.trim());
+  const record = await db.insert(typeof message === 'string' ? message.trim() : JSON.stringify(message));
   console.log(`   ✅ Tersimpan! ID: ${record.id}`);
 
   res.status(201).json({
