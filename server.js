@@ -42,35 +42,61 @@ app.get('/', async (req, res) => {
     try {
       if (typeof n.message === 'string' && (n.message.startsWith('{') || n.message.startsWith('['))) {
         const p = JSON.parse(n.message);
-        if (p && (p.appSource || p.amount || p.payerName || p.rawMessage)) {
-          let badgeBg = '#2c3e50';
-          if (p.appSource === 'DANA') badgeBg = '#118eea';
-          else if (p.appSource === 'ShopeePay') badgeBg = '#ee4d2d';
-          else if (p.appSource === 'GoPay') badgeBg = '#00aed6';
-          else if (p.appSource === 'OVO') badgeBg = '#4c3298';
-          else if (p.appSource === 'BCA') badgeBg = '#0060af';
+        if (p && typeof p === 'object') {
+          if (p.appSource || p.amount || p.payerName || p.rawMessage) {
+            // 💳 Format 1: Transaksi E-Wallet / QRIS
+            let badgeBg = '#2c3e50';
+            if (p.appSource === 'DANA') badgeBg = '#118eea';
+            else if (p.appSource === 'ShopeePay') badgeBg = '#ee4d2d';
+            else if (p.appSource === 'GoPay') badgeBg = '#00aed6';
+            else if (p.appSource === 'OVO') badgeBg = '#4c3298';
+            else if (p.appSource === 'BCA') badgeBg = '#0060af';
 
-          const formatted = p.formattedAmount || (p.amount ? 'Rp ' + Number(p.amount).toLocaleString('id-ID') : '');
+            const formatted = p.formattedAmount || (p.amount ? 'Rp ' + Number(p.amount).toLocaleString('id-ID') : '');
 
-          contentHtml = `
-            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
-              <span style="background:${badgeBg}; color:white; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:12px;">${p.appSource || 'Payment'}</span>
-              ${formatted ? `<span style="color:#27ae60; font-weight:bold; font-size:16px;">${formatted}</span>` : ''}
-              ${p.payerName ? `<span style="color:#555; font-size:13px;">• Pengirim: <b>${p.payerName}</b></span>` : ''}
-              ${p.type ? `<span style="background:#edf2f7; color:#4a5568; font-size:11px; padding:2px 6px; border-radius:4px;">${p.type}</span>` : ''}
-            </div>
-            ${p.rawMessage ? `<div style="font-size:13px; color:#444; background:#f8f9fa; padding:6px 10px; border-radius:4px; border-left:3px solid ${badgeBg}; margin-bottom:6px;">${p.rawMessage.replace(/\n/g, '<br>')}</div>` : ''}
-            <details style="margin-top:4px;">
-              <summary style="font-size:11px; color:#3498db; cursor:pointer;">🔍 Lihat JSON Mentah</summary>
-              <pre style="background:#2d3748; color:#a0aec0; padding:8px; border-radius:4px; font-size:11px; margin-top:4px; overflow-x:auto; font-family:monospace;">${JSON.stringify(p, null, 2)}</pre>
-            </details>
-          `;
+            contentHtml = `
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+                <span style="background:${badgeBg}; color:white; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:12px;">💳 ${p.appSource || 'Payment'}</span>
+                ${formatted ? `<span style="color:#27ae60; font-weight:bold; font-size:16px;">${formatted}</span>` : ''}
+                ${p.payerName ? `<span style="color:#555; font-size:13px;">• Pengirim: <b>${p.payerName}</b></span>` : ''}
+                ${p.type ? `<span style="background:#edf2f7; color:#4a5568; font-size:11px; padding:2px 6px; border-radius:4px;">${p.type}</span>` : ''}
+              </div>
+              ${p.rawMessage ? `<div style="font-size:13px; color:#444; background:#f8f9fa; padding:6px 10px; border-radius:4px; border-left:3px solid ${badgeBg}; margin-bottom:6px;">${p.rawMessage.replace(/\n/g, '<br>')}</div>` : ''}
+              <details style="margin-top:4px;">
+                <summary style="font-size:11px; color:#3498db; cursor:pointer;">🔍 Lihat JSON Mentah</summary>
+                <pre style="background:#2d3748; color:#a0aec0; padding:8px; border-radius:4px; font-size:11px; margin-top:4px; overflow-x:auto; font-family:monospace;">${JSON.stringify(p, null, 2)}</pre>
+              </details>
+            `;
+          } else {
+            // 📦 Format 2: Objek JSON Lengkap Lainnya (Custom Frontend)
+            const keys = Object.keys(p).slice(0, 5);
+            const pills = keys.map(k => `<span style="background:#edf2f7; color:#4a5568; font-size:12px; padding:2px 7px; border-radius:4px; margin-right:4px;"><b>${k}:</b> ${typeof p[k] === 'object' ? JSON.stringify(p[k]) : p[k]}</span>`).join(' ');
+
+            contentHtml = `
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+                <span style="background:#6c5ce7; color:white; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:12px;">📦 Objek JSON</span>
+                ${pills}
+              </div>
+              <details style="margin-top:4px;">
+                <summary style="font-size:11px; color:#3498db; cursor:pointer;">🔍 Lihat Seluruh Data JSON</summary>
+                <pre style="background:#2d3748; color:#a0aec0; padding:8px; border-radius:4px; font-size:11px; margin-top:4px; overflow-x:auto; font-family:monospace;">${JSON.stringify(p, null, 2)}</pre>
+              </details>
+            `;
+          }
         }
       }
     } catch (e) {}
 
     if (!contentHtml) {
-      contentHtml = `<span style="font-size:14px; color:#2d3748;">${n.message}</span>`;
+      // 💬 Format 3: Pesan Teks Sederhana (Pemula)
+      contentHtml = `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+          <span style="background:#0984e3; color:white; font-size:11px; font-weight:bold; padding:2px 8px; border-radius:12px;">💬 Pesan Biasa</span>
+        </div>
+        <div style="font-size:14px; color:#2d3748; background:#f7fafc; border-left:3px solid #0984e3; padding:8px 12px; border-radius:4px;">
+          ${n.message}
+        </div>
+      `;
     }
 
     return `
@@ -147,11 +173,15 @@ app.get('/', async (req, res) => {
         </table>
       </div>
 
-      <div class="tip">
-        💡 <b>Format untuk Tim Frontend Mobile:</b><br><br>
-        <code class="inline">POST ${publicUrl}</code><br><br>
-        Header: <code class="inline">Content-Type: application/json</code><br>
-        Body: <code class="inline">{"message": "isi pesan notifikasi"}</code>
+      <div class="tip" style="line-height:1.6;">
+        💡 <b>Format Pengiriman Fleksibel (Semua Format Diterima Otomatis):</b><br><br>
+        <b>Pilihan 1 — Teks Sederhana (Pemula):</b><br>
+        <code>{"message": "Halo dari aplikasi mobile!"}</code><br><br>
+        <b>Pilihan 2 — Transaksi E-Wallet / QRIS (Lengkap):</b><br>
+        <code>{"appSource": "DANA", "amount": 50000, "formattedAmount": "Rp 50.000", "payerName": "BUDI", "type": "qris_in"}</code><br><br>
+        <b>Pilihan 3 — Data Custom Bebas (Frontend Lain):</b><br>
+        <code>{"user": "Budi", "status": "order_created", "total": 120000}</code><br><br>
+        <small style="color:#2c3e50;">✨ Server otomatis mengenali apakah data berupa teks biasa atau JSON lengkap!</small>
       </div>
 
       <br>

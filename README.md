@@ -120,12 +120,42 @@ POST https://webhook-server-sand.vercel.app/webhook
 Content-Type: application/json
 ```
 
-### 3. Body Request (JSON)
+### 3. Pilihan Format Body Request (Semua Format Diterima Otomatis)
+
+Server ini dirancang sangat fleksibel untuk berbagai tingkatan anggota tim frontend yang sedang belajar:
+
+#### 🔹 Pilihan A: Format Pesan Sederhana (Untuk Pemula)
+Cocok untuk yang baru pertama kali belajar POST HTTP:
 ```json
 {
-  "message": "Transaksi berhasil: ID #TRX-99823 oleh Budi"
+  "message": "Halo! Saya tim frontend pemula sedang belajar webhook."
 }
 ```
+
+#### 🔹 Pilihan B: Format Transaksi E-Wallet / QRIS (Lengkap)
+Cocok untuk aplikasi listener e-wallet (DANA, ShopeePay, GoPay, BCA, dll):
+```json
+{
+  "appSource": "DANA",
+  "amount": 50000.0,
+  "formattedAmount": "Rp 50.000",
+  "payerName": "BUDI SANTOSO",
+  "type": "qris_in",
+  "dateTime": "2026-09-10T09:46:22",
+  "rawMessage": "DANA\nKamu menerima Saldo DANA sebesar Rp 50.000 dari BUDI SANTOSO"
+}
+```
+
+#### 🔹 Pilihan C: Format JSON Bebas (Custom Frontend)
+Cocok untuk frontend yang mengirimkan data apapun:
+```json
+{
+  "user": "Andi",
+  "action": "checkout_berhasil",
+  "total": 125000
+}
+```
+*(Server otomatis mendeteksi apakah data berupa teks biasa atau JSON lengkap, dan menyimpannya secara rapi ke PostgreSQL!)*
 
 ### 4. Contoh Response Sukses (HTTP 201 Created)
 ```json
