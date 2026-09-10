@@ -264,4 +264,10 @@ async function start() {
   }
 }
 
-start();
+if (!process.env.VERCEL) {
+  start();
+} else {
+  db.init().catch(err => console.error('DB init err:', err.message));
+}
+
+module.exports = app;
